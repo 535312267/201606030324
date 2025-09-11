@@ -1,0 +1,28 @@
+{
+  "name": "harmonyos-calendar",
+  "version": "1.0.0",
+  "description": "鸿蒙月历应用 - 基于Swiper组件的循环滑动月历",
+  "main": "src/main/ets/index.ets",
+  "author": "Developer",
+  "license": "MIT",
+  "keywords": [
+    "harmonyos",
+    "arkts",
+    "calendar",
+    "swiper",
+    "menstrual-cycle"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "your-repository-url"
+  },
+  "dependencies": {
+    "@ohos.data.preferences": "*",
+    "@ohos.net.http": "*"
+  },
+  "devDependencies": {},
+  "scripts": {
+    "build": "hvigorw assembleHap",
+    "clean": "hvigorw clean"
+  }
+}
