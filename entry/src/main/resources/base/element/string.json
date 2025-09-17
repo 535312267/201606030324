@@ -1,0 +1,16 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "刻度尺组件演示应用"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "刻度尺组件演示"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "刻度尺演示"
+    }
+  ]
+}
