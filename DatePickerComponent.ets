@@ -423,7 +423,7 @@ export struct DatePickerComponent {
       .padding({ left: 16, right: 16, bottom: 8 })
       .backgroundColor('#FFF5E6')
       .borderRadius(8)
-      .margin({ horizontal: 16 })
+      .margin({ left: 16, right: 16 })
       
       // 星期标题
       Row() {
@@ -436,7 +436,7 @@ export struct DatePickerComponent {
         })
       }
       .width('100%')
-      .padding({ horizontal: 16, vertical: 8 })
+      .padding({ left: 16, right: 16, top: 8, bottom: 8 })
       
       // 月份列表
       List({ scroller: this.listScroller }) {
@@ -502,7 +502,7 @@ export struct DatePickerComponent {
     .padding(16)
     .backgroundColor(Color.White)
     .borderRadius(8)
-    .margin({ horizontal: 16, vertical: 4 })
+    .margin({ left: 16, right: 16, top: 4, bottom: 4 })
   }
   
   // 单个日期视图
@@ -514,7 +514,7 @@ export struct DatePickerComponent {
         .width(32)
         .height(32)
         .fill(this.getDayBackgroundColor(dayData))
-        .stroke(this.getDayBorderColor(dayData), 1)
+        .stroke({ color: this.getDayBorderColor(dayData), width: 1 })
       
       // 日期数字
       Text(dayData.day.toString())

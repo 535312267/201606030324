@@ -89,7 +89,7 @@ struct Index {
       .width('100%')
       .padding(16)
       .backgroundColor(Color.White)
-      .border({ width: { top: 1 }, color: '#E5E5E5' })
+      .border({ width: 1, color: '#E5E5E5' })
     }
     .width('100%')
     .height('100%')
