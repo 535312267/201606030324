@@ -55,6 +55,13 @@ export struct DatePickerComponent {
     this.initializeDateRange();
     this.generateInitialMonths();
     this.loadNetworkData();
+    
+    // 滚动到列表末尾（当前月份）
+    setTimeout(() => {
+      if (this.monthList.length > 0) {
+        this.listScroller.scrollToIndex(this.monthList.length - 1);
+      }
+    }, 100);
   }
   
   // 初始化日期范围
@@ -63,14 +70,14 @@ export struct DatePickerComponent {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     
-    // 下个月开始
-    const nextMonth = new Date(currentYear, currentMonth + 1, 1);
-    const startTime = nextMonth.getTime();
+    // 从2010年1月开始
+    const startTime = new Date(2010, 0, 1).getTime();
     
-    // 到2010年1月结束
-    const endTime = new Date(2010, 0, 1).getTime();
+    // 到下个月结束
+    const nextMonth = new Date(currentYear, currentMonth + 2, 0); // 下个月的最后一天
+    const endTime = nextMonth.getTime();
     
-    this.selectableRange = [endTime, startTime];
+    this.selectableRange = [startTime, endTime];
     
     // 设置默认选中范围
     if (this.config.defaultSelectedRange) {
@@ -82,15 +89,16 @@ export struct DatePickerComponent {
     }
   }
   
-  // 生成初始月份数据（当前月份前后各3个月）
+  // 生成初始月份数据（从历史月份到当前月）
   private generateInitialMonths() {
     const now = new Date();
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     
-    // 生成从当前月份开始的6个月数据
-    for (let i = 0; i < 6; i++) {
-      const targetDate = new Date(currentYear, currentMonth + 1 + i, 1);
+    // 生成最近6个月的数据（包括当前月和下个月）
+    // 按时间倒序排列：最新的月份在最后
+    for (let i = 5; i >= 0; i--) {
+      const targetDate = new Date(currentYear, currentMonth + 1 - i, 1);
       const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
       this.monthList.push(monthData);
     }
@@ -175,7 +183,17 @@ export struct DatePickerComponent {
   private isDateInSelectableRange(timestamp: number): boolean {
     const start = this.selectableRange[0];
     const end = this.selectableRange[1];
-    return timestamp >= start && timestamp <= end;
+    const result = timestamp >= start && timestamp <= end;
+    
+    // 调试信息
+    if (!result) {
+      const date = new Date(timestamp);
+      const startDate = new Date(start);
+      const endDate = new Date(end);
+      console.log(`Date ${date.toDateString()} not in range ${startDate.toDateString()} - ${endDate.toDateString()}`);
+    }
+    
+    return result;
   }
   
   // 模拟网络请求加载数据
@@ -256,21 +274,28 @@ export struct DatePickerComponent {
   
   // 处理日期点击
   private onDateClick(dayData: DayData) {
+    console.log('Date clicked:', dayData.day, dayData.timestamp);
+    
     // 未来日期且不在选中范围内，不允许点击
     if (dayData.isFuture && !dayData.isInRange) {
+      console.log('Future date not in range, click ignored');
       return;
     }
     
     // 不在可选择范围内的日期不允许点击
     if (!dayData.isInRange) {
+      console.log('Date not in selectable range, click ignored');
       return;
     }
     
     // 切换选中状态
-    if (this.selectedDates.has(dayData.timestamp)) {
+    const wasSelected = this.selectedDates.has(dayData.timestamp);
+    if (wasSelected) {
       this.selectedDates.delete(dayData.timestamp);
+      console.log('Date deselected:', dayData.day);
     } else {
       this.selectedDates.add(dayData.timestamp);
+      console.log('Date selected:', dayData.day);
     }
     
     // 更新对应的月份数据
@@ -284,21 +309,19 @@ export struct DatePickerComponent {
   
   // 更新日期选中状态
   private updateDaySelection(timestamp: number) {
-    const targetDate = new Date(timestamp);
-    const targetYear = targetDate.getFullYear();
-    const targetMonth = targetDate.getMonth();
+    // 创建新的月份列表以触发@State更新
+    const newMonthList: MonthData[] = [];
     
-    const monthIndex = this.monthList.findIndex(month => 
-      month.year === targetYear && month.month === targetMonth
-    );
-    
-    if (monthIndex >= 0) {
-      const dayIndex = this.monthList[monthIndex].days.findIndex(day => 
-        day.timestamp === timestamp
-      );
+    for (let i = 0; i < this.monthList.length; i++) {
+      const monthData = this.monthList[i];
+      let monthUpdated = false;
+      const updatedDays: DayData[] = [];
       
-        if (dayIndex >= 0) {
-          const dayData = this.monthList[monthIndex].days[dayIndex];
+      for (let j = 0; j < monthData.days.length; j++) {
+        const dayData = monthData.days[j];
+        
+        if (dayData.timestamp === timestamp) {
+          // 更新目标日期
           const updatedDayData: DayData = {
             day: dayData.day,
             timestamp: dayData.timestamp,
@@ -307,32 +330,37 @@ export struct DatePickerComponent {
             isInRange: dayData.isInRange,
             hasNetworkData: dayData.hasNetworkData
           };
-          this.monthList[monthIndex].days[dayIndex] = updatedDayData;
-          
-          // 重新生成周数据
-          const monthData = this.monthList[monthIndex];
-          const weeks = this.generateWeeksData(monthData.year, monthData.month, monthData.days);
-          const updatedMonthData: MonthData = {
-            year: monthData.year,
-            month: monthData.month,
-            days: monthData.days,
-            weeks: weeks
-          };
-          this.monthList[monthIndex] = updatedMonthData;
+          updatedDays.push(updatedDayData);
+          monthUpdated = true;
+        } else {
+          updatedDays.push(dayData);
         }
+      }
+      
+      if (monthUpdated) {
+        // 重新生成周数据
+        const weeks = this.generateWeeksData(monthData.year, monthData.month, updatedDays);
+        const updatedMonthData: MonthData = {
+          year: monthData.year,
+          month: monthData.month,
+          days: updatedDays,
+          weeks: weeks
+        };
+        newMonthList.push(updatedMonthData);
+      } else {
+        newMonthList.push(monthData);
+      }
     }
+    
+    // 触发@State更新
+    this.monthList = newMonthList;
   }
   
   // 滑动到指定索引时加载更多月份
   private onScrollIndex = (start: number, end: number) => {
-    // 当滑动到接近末尾时，加载更多历史月份
-    if (end >= this.monthList.length - 2) {
-      this.loadMoreHistoryMonths();
-    }
-    
-    // 当滑动到接近开头时，加载更多未来月份（如果需要）
+    // 当滑动到接近开头时，加载更多历史月份
     if (start <= 1) {
-      this.loadMoreFutureMonths();
+      this.loadMoreHistoryMonths();
     }
     
     // 更新当前显示的月份
@@ -341,50 +369,35 @@ export struct DatePickerComponent {
   
   // 加载更多历史月份
   private loadMoreHistoryMonths() {
-    const lastMonth = this.monthList[this.monthList.length - 1];
-    const lastDate = new Date(lastMonth.year, lastMonth.month, 1);
+    const firstMonth = this.monthList[0];
+    const firstDate = new Date(firstMonth.year, firstMonth.month, 1);
     
-    // 添加6个更早的月份
+    // 添加6个更早的月份到开头
+    const newMonths: MonthData[] = [];
     for (let i = 1; i <= 6; i++) {
-      const targetDate = new Date(lastDate.getFullYear(), lastDate.getMonth() - i, 1);
+      const targetDate = new Date(firstDate.getFullYear(), firstDate.getMonth() - i, 1);
       
       // 检查是否已经到达2010年1月
-      if (targetDate.getFullYear() < 2010) {
+      if (targetDate.getFullYear() < 2010 || 
+          (targetDate.getFullYear() === 2010 && targetDate.getMonth() < 0)) {
         break;
       }
       
       const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
-      this.monthList.push(monthData);
+      newMonths.unshift(monthData); // 添加到数组开头
     }
+    
+    // 将新月份添加到列表开头
+    const combinedList: MonthData[] = [];
+    for (let i = 0; i < newMonths.length; i++) {
+      combinedList.push(newMonths[i]);
+    }
+    for (let i = 0; i < this.monthList.length; i++) {
+      combinedList.push(this.monthList[i]);
+    }
+    this.monthList = combinedList;
   }
   
-  // 加载更多未来月份（如果需要）
-  private loadMoreFutureMonths() {
-    const firstMonth = this.monthList[0];
-    const firstDate = new Date(firstMonth.year, firstMonth.month, 1);
-    
-    // 检查是否需要添加更多未来月份
-    const now = new Date();
-    if (firstDate.getTime() > now.getTime()) {
-      // 添加更早的月份到开头
-      const newMonths: MonthData[] = [];
-      for (let i = 1; i <= 3; i++) {
-        const targetDate = new Date(firstDate.getFullYear(), firstDate.getMonth() - i, 1);
-        const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
-        newMonths.unshift(monthData);
-      }
-      
-      // 合并数组
-      const combinedList: MonthData[] = [];
-      for (let i = 0; i < newMonths.length; i++) {
-        combinedList.push(newMonths[i]);
-      }
-      for (let i = 0; i < this.monthList.length; i++) {
-        combinedList.push(this.monthList[i]);
-      }
-      this.monthList = combinedList;
-    }
-  }
   
   build() {
     Column() {
@@ -401,17 +414,22 @@ export struct DatePickerComponent {
           .fontColor(Color.White)
           .borderRadius(20)
           .onClick(() => {
-            // 滑动到当前月份
+            // 滑动到当前月份（应该在列表最后）
             const now = new Date();
             const currentYear = now.getFullYear();
             const currentMonth = now.getMonth();
             
+            // 查找当前月份或下个月（因为范围是下个月开始）
             const targetIndex = this.monthList.findIndex(month => 
-              month.year === currentYear && month.month === currentMonth + 1
+              (month.year === currentYear && month.month === currentMonth) ||
+              (month.year === currentYear && month.month === currentMonth + 1)
             );
             
             if (targetIndex >= 0) {
               this.listScroller.scrollToIndex(targetIndex);
+            } else {
+              // 如果没找到，滚动到列表末尾
+              this.listScroller.scrollToIndex(this.monthList.length - 1);
             }
           })
       }
@@ -518,16 +536,17 @@ export struct DatePickerComponent {
   DayView(dayData: DayData) {
     Stack() {
       // 背景圆圈
-      Circle()
-        .width(32)
-        .height(32)
-        .fill(this.getDayBackgroundColor(dayData))
-        .stroke({ color: this.getDayBorderColor(dayData), width: 1 })
+      if (dayData.isSelected) {
+        Circle()
+          .width(32)
+          .height(32)
+          .fill('#FF69B4')
+      }
       
       // 日期数字
       Text(dayData.day.toString())
         .fontSize(14)
-        .fontColor(this.getDayTextColor(dayData))
+        .fontColor(dayData.isSelected ? Color.White : Color.Black)
         .fontWeight(dayData.isSelected ? FontWeight.Bold : FontWeight.Normal)
       
       // 网络数据指示点
@@ -541,36 +560,14 @@ export struct DatePickerComponent {
     }
     .width('14.28%')
     .height(40)
+    .justifyContent(FlexAlign.Center)
+    .alignItems(HorizontalAlign.Center)
     .onClick(() => this.onDateClick(dayData))
     .opacity(dayData.isFuture && !dayData.isInRange ? 0.3 : 1.0)
+    .backgroundColor(dayData.isSelected ? '#FF69B4' : Color.Transparent)
+    .borderRadius(16)
   }
   
-  // 获取日期背景色
-  private getDayBackgroundColor(dayData: DayData): ResourceColor {
-    if (dayData.isSelected) {
-      return '#FF69B4';
-    }
-    return Color.Transparent;
-  }
-  
-  // 获取日期边框色
-  private getDayBorderColor(dayData: DayData): ResourceColor {
-    if (dayData.isSelected) {
-      return '#FF69B4';
-    }
-    return Color.Transparent;
-  }
-  
-  // 获取日期文字颜色
-  private getDayTextColor(dayData: DayData): ResourceColor {
-    if (dayData.isSelected) {
-      return Color.White;
-    }
-    if (dayData.isFuture && !dayData.isInRange) {
-      return '#CCC';
-    }
-    return Color.Black;
-  }
   
   // 公共方法：设置配置
   public setConfig(config: DatePickerConfig) {
