@@ -43,7 +43,7 @@ export struct DatePickerComponent {
   private selectableRange: [number, number] = [0, 0];
   
   // List组件控制器
-  private listController: ListController = new ListController();
+  private listScroller: ListScroller = new ListScroller();
   
   // 性能优化：缓存计算结果
   private monthCache: Map<string, MonthData> = new Map();
@@ -403,7 +403,7 @@ export struct DatePickerComponent {
             );
             
             if (targetIndex >= 0) {
-              this.listController.scrollToIndex(targetIndex);
+              this.listScroller.scrollToIndex(targetIndex);
             }
           })
       }
@@ -412,9 +412,8 @@ export struct DatePickerComponent {
       
       // 提示信息
       Row() {
-        Image($r('app.media.sun'))
-          .width(16)
-          .height(16)
+        Text('☀️')
+          .fontSize(16)
         Text('点击日期即可添加/删除/编辑经期')
           .fontSize(12)
           .fontColor('#666')
@@ -440,7 +439,7 @@ export struct DatePickerComponent {
       .padding({ horizontal: 16, vertical: 8 })
       
       // 月份列表
-      List({ controller: this.listController }) {
+      List({ scroller: this.listScroller }) {
         ForEach(this.monthList, (monthData: MonthData, monthIndex: number) => {
           ListItem() {
             this.MonthView(monthData)
@@ -449,8 +448,6 @@ export struct DatePickerComponent {
       }
       .layoutWeight(1)
       .onScrollIndex(this.onScrollIndex)
-      .maintainVisibleContentPosition(true)
-      .cachedCount(3) // 缓存3个月的数据以提升性能
       
       // 加载指示器
       if (this.isLoading) {
