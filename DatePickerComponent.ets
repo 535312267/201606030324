@@ -10,6 +10,10 @@ export interface DatePickerConfig {
   futureSelectedState?: boolean;
   // 网络请求数据回调
   onDataLoad?: (timestamps: number[]) => void;
+  // 点击日期时自动选中后续天数（默认为0，不自动选中）
+  autoSelectDays?: number;
+  // 是否启用智能选择模式（点击已选中日期的前后会自动选中/取消选中范围）
+  smartSelectionMode?: boolean;
 }
 
 // 月份数据结构
@@ -334,36 +338,239 @@ export struct DatePickerComponent {
   // 处理日期点击
   private onDateClick(dayData: DayData) {
     console.log('Date clicked:', dayData.day, dayData.timestamp);
-    
+
     // 未来日期且不在选中范围内，不允许点击
     if (dayData.isFuture && !dayData.isInRange) {
       console.log('Future date not in range, click ignored');
       return;
     }
-    
+
     // 不在可选择范围内的日期不允许点击
     if (!dayData.isInRange) {
       console.log('Date not in selectable range, click ignored');
       return;
     }
-    
-    // 切换选中状态
-    const wasSelected = this.selectedDates.has(dayData.timestamp);
-    if (wasSelected) {
-      this.selectedDates.delete(dayData.timestamp);
-      console.log('Date deselected:', dayData.day);
+
+    // 智能选择模式
+    if (this.config.smartSelectionMode) {
+      this.handleSmartSelection(dayData);
     } else {
-      this.selectedDates.add(dayData.timestamp);
-      console.log('Date selected:', dayData.day);
+      this.handleNormalSelection(dayData);
     }
-    
-    // 更新对应的月份数据
-    this.updateDaySelection(dayData.timestamp);
-    
+
     // 通知父组件选中日期变化
     if (this.onSelectedDatesChange) {
       this.onSelectedDatesChange(this.getSelectedDates());
     }
+  }
+
+  // 普通选择模式
+  private handleNormalSelection(dayData: DayData) {
+    const wasSelected = this.selectedDates.has(dayData.timestamp);
+    
+    if (wasSelected) {
+      // 取消选中：移除当前日期和可能的连续日期
+      this.deselectDateRange(dayData.timestamp);
+      console.log('Date deselected:', dayData.day);
+    } else {
+      // 选中：添加当前日期和后续几天
+      this.selectDateRange(dayData.timestamp);
+      console.log('Date selected:', dayData.day);
+    }
+  }
+
+  // 智能选择模式
+  private handleSmartSelection(dayData: DayData) {
+    const wasSelected = this.selectedDates.has(dayData.timestamp);
+    
+    if (wasSelected) {
+      // 如果点击已选中的日期，智能取消选中相关范围
+      this.smartDeselect(dayData.timestamp);
+    } else {
+      // 如果点击未选中的日期，智能选中范围
+      this.smartSelect(dayData.timestamp);
+    }
+  }
+
+  // 选中日期范围（当前日期 + 后续几天）
+  private selectDateRange(startTimestamp: number) {
+    const autoSelectDays = this.config.autoSelectDays || 0;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    
+    // 选中起始日期
+    this.selectedDates.add(startTimestamp);
+    
+    // 选中后续几天
+    for (let i = 1; i <= autoSelectDays; i++) {
+      const nextDayTimestamp = startTimestamp + (i * oneDayMs);
+      
+      // 检查是否在可选择范围内
+      if (this.isDateInSelectableRange(nextDayTimestamp)) {
+        // 检查是否是未来日期且不允许选中
+        const isFuture = nextDayTimestamp > Date.now();
+        if (!(isFuture && !this.config.futureSelectedState)) {
+          this.selectedDates.add(nextDayTimestamp);
+          console.log(`Auto selected: ${new Date(nextDayTimestamp).toDateString()}`);
+        }
+      }
+    }
+    
+    // 批量更新UI
+    this.updateMultipleDaysSelection();
+  }
+
+  // 取消选中日期范围
+  private deselectDateRange(startTimestamp: number) {
+    const autoSelectDays = this.config.autoSelectDays || 0;
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    
+    // 取消选中起始日期
+    this.selectedDates.delete(startTimestamp);
+    
+    // 取消选中后续几天（如果它们是连续选中的）
+    for (let i = 1; i <= autoSelectDays; i++) {
+      const nextDayTimestamp = startTimestamp + (i * oneDayMs);
+      if (this.selectedDates.has(nextDayTimestamp)) {
+        this.selectedDates.delete(nextDayTimestamp);
+        console.log(`Auto deselected: ${new Date(nextDayTimestamp).toDateString()}`);
+      } else {
+        // 如果遇到未选中的日期，停止取消选中
+        break;
+      }
+    }
+    
+    // 批量更新UI
+    this.updateMultipleDaysSelection();
+  }
+
+  // 智能选中
+  private smartSelect(clickedTimestamp: number) {
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const autoSelectDays = this.config.autoSelectDays || 5; // 智能模式默认5天
+    
+    // 查找最近的选中日期
+    const nearestSelected = this.findNearestSelectedDate(clickedTimestamp);
+    
+    if (nearestSelected) {
+      // 如果有最近的选中日期，选中它们之间的范围
+      const startTime = Math.min(clickedTimestamp, nearestSelected);
+      const endTime = Math.max(clickedTimestamp, nearestSelected);
+      
+      for (let timestamp = startTime; timestamp <= endTime; timestamp += oneDayMs) {
+        if (this.isDateInSelectableRange(timestamp)) {
+          this.selectedDates.add(timestamp);
+        }
+      }
+      console.log('Smart selected range');
+    } else {
+      // 如果没有最近的选中日期，按普通模式选中
+      this.selectDateRange(clickedTimestamp);
+    }
+    
+    this.updateMultipleDaysSelection();
+  }
+
+  // 智能取消选中
+  private smartDeselect(clickedTimestamp: number) {
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    
+    // 查找连续的选中范围并取消选中
+    const range = this.findConnectedSelectedRange(clickedTimestamp);
+    
+    for (let timestamp = range.start; timestamp <= range.end; timestamp += oneDayMs) {
+      this.selectedDates.delete(timestamp);
+    }
+    
+    console.log('Smart deselected range');
+    this.updateMultipleDaysSelection();
+  }
+
+  // 查找最近的选中日期
+  private findNearestSelectedDate(targetTimestamp: number): number | null {
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    const maxSearchDays = 14; // 最多搜索14天
+    
+    // 向前和向后搜索
+    for (let i = 1; i <= maxSearchDays; i++) {
+      const prevDay = targetTimestamp - (i * oneDayMs);
+      const nextDay = targetTimestamp + (i * oneDayMs);
+      
+      if (this.selectedDates.has(prevDay)) {
+        return prevDay;
+      }
+      if (this.selectedDates.has(nextDay)) {
+        return nextDay;
+      }
+    }
+    
+    return null;
+  }
+
+  // 查找连续的选中范围
+  private findConnectedSelectedRange(centerTimestamp: number): { start: number, end: number } {
+    const oneDayMs = 24 * 60 * 60 * 1000;
+    let start = centerTimestamp;
+    let end = centerTimestamp;
+    
+    // 向前查找
+    while (this.selectedDates.has(start - oneDayMs)) {
+      start -= oneDayMs;
+    }
+    
+    // 向后查找
+    while (this.selectedDates.has(end + oneDayMs)) {
+      end += oneDayMs;
+    }
+    
+    return { start, end };
+  }
+
+  // 批量更新多个日期的选中状态
+  private updateMultipleDaysSelection() {
+    // 创建新的月份列表以触发@State更新
+    const newMonthList: MonthData[] = [];
+
+    for (let i = 0; i < this.monthList.length; i++) {
+      const monthData = this.monthList[i];
+      const updatedDays: DayData[] = [];
+      let monthUpdated = false;
+
+      for (let j = 0; j < monthData.days.length; j++) {
+        const dayData = monthData.days[j];
+        const newIsSelected = this.selectedDates.has(dayData.timestamp);
+        
+        if (newIsSelected !== dayData.isSelected) {
+          monthUpdated = true;
+        }
+        
+        const updatedDayData: DayData = {
+          day: dayData.day,
+          timestamp: dayData.timestamp,
+          isSelected: newIsSelected,
+          isFuture: dayData.isFuture,
+          isInRange: dayData.isInRange,
+          hasNetworkData: dayData.hasNetworkData
+        };
+        updatedDays.push(updatedDayData);
+      }
+
+      if (monthUpdated) {
+        // 重新生成周数据
+        const weeks = this.generateWeeksData(monthData.year, monthData.month, updatedDays);
+        const updatedMonthData: MonthData = {
+          year: monthData.year,
+          month: monthData.month,
+          days: updatedDays,
+          weeks: weeks
+        };
+        newMonthList.push(updatedMonthData);
+      } else {
+        newMonthList.push(monthData);
+      }
+    }
+
+    // 触发@State更新
+    this.monthList = newMonthList;
   }
   
   // 更新日期选中状态
@@ -689,6 +896,12 @@ export struct DatePickerComponent {
     }
     if (config.onDataLoad !== undefined) {
       this.config.onDataLoad = config.onDataLoad;
+    }
+    if (config.autoSelectDays !== undefined) {
+      this.config.autoSelectDays = config.autoSelectDays;
+    }
+    if (config.smartSelectionMode !== undefined) {
+      this.config.smartSelectionMode = config.smartSelectionMode;
     }
     
     // 重新初始化
