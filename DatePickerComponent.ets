@@ -34,6 +34,12 @@ interface DayData {
   hasNetworkData: boolean;
 }
 
+// 日期范围结构
+interface DateRange {
+  start: number;
+  end: number;
+}
+
 @Component
 export struct DatePickerComponent {
   @State private monthList: MonthData[] = [];
@@ -507,7 +513,7 @@ export struct DatePickerComponent {
   }
 
   // 查找连续的选中范围
-  private findConnectedSelectedRange(centerTimestamp: number): { start: number, end: number } {
+  private findConnectedSelectedRange(centerTimestamp: number): DateRange {
     const oneDayMs = 24 * 60 * 60 * 1000;
     let start = centerTimestamp;
     let end = centerTimestamp;
@@ -522,7 +528,12 @@ export struct DatePickerComponent {
       end += oneDayMs;
     }
     
-    return { start, end };
+    const result: DateRange = {
+      start: start,
+      end: end
+    };
+    
+    return result;
   }
 
   // 批量更新多个日期的选中状态
