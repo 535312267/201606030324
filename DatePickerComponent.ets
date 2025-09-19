@@ -17,6 +17,7 @@ interface MonthData {
   year: number;
   month: number;
   days: DayData[];
+  weeks: (DayData | null)[][]; // 预处理的周数据
 }
 
 // 日期数据结构
@@ -118,10 +119,48 @@ export struct DatePickerComponent {
       days.push(dayData);
     }
     
-    const monthData: MonthData = { year, month, days };
+    // 预处理周数据
+    const weeks = this.generateWeeksData(year, month, days);
+    
+    const monthData: MonthData = { year, month, days, weeks };
     this.monthCache.set(cacheKey, monthData);
     
     return monthData;
+  }
+  
+  // 生成周数据
+  private generateWeeksData(year: number, month: number, days: DayData[]): (DayData | null)[][] {
+    // 计算第一天是星期几
+    const firstDay = new Date(year, month, 1).getDay();
+    const startIndex = firstDay === 0 ? 6 : firstDay - 1; // 周一为0
+    
+    let currentWeek: (DayData | null)[] = [];
+    let weeks: (DayData | null)[][] = [];
+    
+    // 添加空白日期
+    for (let i = 0; i < startIndex; i++) {
+      currentWeek.push(null);
+    }
+    
+    // 添加实际日期
+    days.forEach((dayData) => {
+      currentWeek.push(dayData);
+      
+      if (currentWeek.length === 7) {
+        weeks.push([...currentWeek]);
+        currentWeek = [];
+      }
+    });
+    
+    // 补齐最后一周
+    while (currentWeek.length > 0 && currentWeek.length < 7) {
+      currentWeek.push(null);
+    }
+    if (currentWeek.length > 0) {
+      weeks.push(currentWeek);
+    }
+    
+    return weeks;
   }
   
   // 检查日期是否在可选择范围内
@@ -178,7 +217,10 @@ export struct DatePickerComponent {
         isSelected: this.selectedDates.has(dayData.timestamp)
       }));
       
-      return { ...monthData, days: updatedDays };
+      // 重新生成周数据
+      const weeks = this.generateWeeksData(monthData.year, monthData.month, updatedDays);
+      
+      return { ...monthData, days: updatedDays, weeks };
     });
   }
   
@@ -388,37 +430,7 @@ export struct DatePickerComponent {
       
       // 日期网格
       Column() {
-        // 计算第一天是星期几
-        const firstDay = new Date(monthData.year, monthData.month, 1).getDay();
-        const startIndex = firstDay === 0 ? 6 : firstDay - 1; // 周一为0
-        
-        let currentWeek: DayData[] = [];
-        let weeks: DayData[][] = [];
-        
-        // 添加空白日期
-        for (let i = 0; i < startIndex; i++) {
-          currentWeek.push(null as any);
-        }
-        
-        // 添加实际日期
-        monthData.days.forEach((dayData, index) => {
-          currentWeek.push(dayData);
-          
-          if (currentWeek.length === 7) {
-            weeks.push([...currentWeek]);
-            currentWeek = [];
-          }
-        });
-        
-        // 补齐最后一周
-        while (currentWeek.length > 0 && currentWeek.length < 7) {
-          currentWeek.push(null as any);
-        }
-        if (currentWeek.length > 0) {
-          weeks.push(currentWeek);
-        }
-        
-        ForEach(weeks, (week: (DayData | null)[], weekIndex: number) => {
+        ForEach(monthData.weeks, (week: (DayData | null)[], weekIndex: number) => {
           Row() {
             ForEach(week, (dayData: DayData | null, dayIndex: number) => {
               if (dayData) {
@@ -534,12 +546,16 @@ export struct DatePickerComponent {
   
   // 更新所有月份的选中状态
   private updateAllMonthsSelection() {
-    this.monthList = this.monthList.map(monthData => ({
-      ...monthData,
-      days: monthData.days.map(dayData => ({
+    this.monthList = this.monthList.map(monthData => {
+      const updatedDays = monthData.days.map(dayData => ({
         ...dayData,
         isSelected: this.selectedDates.has(dayData.timestamp)
-      }))
-    }));
+      }));
+      
+      // 重新生成周数据
+      const weeks = this.generateWeeksData(monthData.year, monthData.month, updatedDays);
+      
+      return { ...monthData, days: updatedDays, weeks };
+    });
   }
 }
