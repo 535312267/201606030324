@@ -416,28 +416,29 @@ export struct DatePickerComponent {
   }
   
   // 滑动到指定索引时加载更多月份
-  private onScrollIndex = (start: number, end: number) => {
+  private onScrollIndex = (start: number, end: number, center: number) => {
     // 当滑动到接近开头时，提前加载更多历史月份
-    if (start <= 2 && !this.isLoadingMore) {
-      this.loadMoreHistoryMonths();
+    // 使用更保守的触发条件，确保maintainVisibleContentPosition生效
+    if (start <= 1 && !this.isLoadingMore) {
+      this.loadMoreHistoryMonthsWithMaintainPosition(center);
     }
     
     // 更新当前显示的月份
-    this.currentDisplayMonth = Math.floor((start + end) / 2);
+    this.currentDisplayMonth = center;
   }
   
   // 防止重复加载的标志
   private isLoadingMore: boolean = false;
   
-  // 加载更多历史月份
-  private loadMoreHistoryMonths() {
+  // 使用maintainVisibleContentPosition加载更多历史月份
+  private loadMoreHistoryMonthsWithMaintainPosition(currentCenter: number) {
     // 防止重复加载
     if (this.isLoadingMore) {
       return;
     }
     
     this.isLoadingMore = true;
-    console.log('Loading more history months...');
+    console.log('Loading more history months with maintainVisibleContentPosition...');
     
     const firstMonth = this.monthList[0];
     const firstDate = new Date(firstMonth.year, firstMonth.month, 1);
@@ -449,12 +450,12 @@ export struct DatePickerComponent {
       return;
     }
     
-    // 使用setTimeout来避免阻塞UI
+    // 使用requestAnimationFrame确保在下一帧执行，配合maintainVisibleContentPosition
     setTimeout(() => {
       const newMonths: MonthData[] = [];
       
-      // 添加3个月而不是6个月，减少一次性加载的数据量
-      for (let i = 1; i <= 3; i++) {
+      // 添加6个月的历史数据
+      for (let i = 1; i <= 6; i++) {
         const targetDate = new Date(firstDate.getFullYear(), firstDate.getMonth() - i, 1);
         
         // 检查是否已经到达2010年1月
@@ -468,21 +469,28 @@ export struct DatePickerComponent {
       }
       
       if (newMonths.length > 0) {
-        // 将新月份添加到列表开头
+        // 关键：在显示区域外（列表开头）插入新数据
+        // maintainVisibleContentPosition会自动保持当前可见内容的位置
         const combinedList: MonthData[] = [];
+        
+        // 先添加新的历史月份（插入到显示区域外）
         for (let i = 0; i < newMonths.length; i++) {
           combinedList.push(newMonths[i]);
         }
+        
+        // 再添加原有的月份
         for (let i = 0; i < this.monthList.length; i++) {
           combinedList.push(this.monthList[i]);
         }
         
+        // 更新列表数据 - maintainVisibleContentPosition会自动处理位置保持
         this.monthList = combinedList;
-        console.log(`Loaded ${newMonths.length} more months, total: ${this.monthList.length}`);
+        
+        console.log(`Loaded ${newMonths.length} more months with maintainVisibleContentPosition, total: ${this.monthList.length}`);
       }
       
       this.isLoadingMore = false;
-    }, 16); // 约一帧的时间，避免阻塞
+    }, 0); // 使用最小延迟，让maintainVisibleContentPosition发挥作用
   }
   
   
@@ -566,6 +574,11 @@ export struct DatePickerComponent {
       .listDirection(Axis.Vertical)
       .scrollBar(BarState.Auto)
       .edgeEffect(EdgeEffect.Spring) // 添加弹性边缘效果
+      .maintainVisibleContentPosition(true) // 保持可见内容位置不变
+      .onReachStart(() => {
+        // 到达顶部时的处理
+        console.log('Reached start of list');
+      })
       
       // 加载指示器
       if (this.isLoading || this.isLoadingMore) {
