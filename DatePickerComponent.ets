@@ -71,7 +71,8 @@ export struct DatePickerComponent {
     
     // 设置默认选中范围
     if (this.config.defaultSelectedRange) {
-      const [start, end] = this.config.defaultSelectedRange;
+      const start = this.config.defaultSelectedRange[0];
+      const end = this.config.defaultSelectedRange[1];
       for (let timestamp = start; timestamp <= end; timestamp += 24 * 60 * 60 * 1000) {
         this.selectedDates.add(timestamp);
       }
@@ -147,7 +148,11 @@ export struct DatePickerComponent {
       currentWeek.push(dayData);
       
       if (currentWeek.length === 7) {
-        weeks.push([...currentWeek]);
+        const weekCopy: (DayData | null)[] = [];
+        for (let k = 0; k < currentWeek.length; k++) {
+          weekCopy.push(currentWeek[k]);
+        }
+        weeks.push(weekCopy);
         currentWeek = [];
       }
     });
@@ -165,7 +170,8 @@ export struct DatePickerComponent {
   
   // 检查日期是否在可选择范围内
   private isDateInSelectableRange(timestamp: number): boolean {
-    const [start, end] = this.selectableRange;
+    const start = this.selectableRange[0];
+    const end = this.selectableRange[1];
     return timestamp >= start && timestamp <= end;
   }
   
@@ -563,19 +569,41 @@ export struct DatePickerComponent {
   
   // 公共方法：设置配置
   public setConfig(config: DatePickerConfig) {
-    this.config = { ...this.config, ...config };
+    // 手动合并配置对象
+    if (config.selectableDates !== undefined) {
+      this.config.selectableDates = config.selectableDates;
+    }
+    if (config.defaultSelectedRange !== undefined) {
+      this.config.defaultSelectedRange = config.defaultSelectedRange;
+    }
+    if (config.futureSelectedState !== undefined) {
+      this.config.futureSelectedState = config.futureSelectedState;
+    }
+    if (config.onDataLoad !== undefined) {
+      this.config.onDataLoad = config.onDataLoad;
+    }
     
     // 重新初始化
     if (config.selectableDates) {
-      this.selectableRange = [
-        Math.min(...config.selectableDates),
-        Math.max(...config.selectableDates)
-      ];
+      let minDate = config.selectableDates[0];
+      let maxDate = config.selectableDates[0];
+      
+      for (let i = 1; i < config.selectableDates.length; i++) {
+        if (config.selectableDates[i] < minDate) {
+          minDate = config.selectableDates[i];
+        }
+        if (config.selectableDates[i] > maxDate) {
+          maxDate = config.selectableDates[i];
+        }
+      }
+      
+      this.selectableRange = [minDate, maxDate];
     }
     
     if (config.defaultSelectedRange) {
       this.selectedDates.clear();
-      const [start, end] = config.defaultSelectedRange;
+      const start = config.defaultSelectedRange[0];
+      const end = config.defaultSelectedRange[1];
       for (let timestamp = start; timestamp <= end; timestamp += 24 * 60 * 60 * 1000) {
         this.selectedDates.add(timestamp);
       }
@@ -584,7 +612,11 @@ export struct DatePickerComponent {
   
   // 公共方法：获取选中的日期
   public getSelectedDates(): number[] {
-    return Array.from(this.selectedDates);
+    const result: number[] = [];
+    this.selectedDates.forEach(timestamp => {
+      result.push(timestamp);
+    });
+    return result;
   }
   
   // 公共方法：清除所有选中
