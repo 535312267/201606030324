@@ -38,9 +38,12 @@ export struct DatePickerComponent {
   @State private currentDisplayMonth: number = 0;
   @State private isLoading: boolean = false;
   
-  // 配置参数
-  private config: DatePickerConfig = {};
+  // 配置参数 - 支持从外部传入
+  @Prop config: DatePickerConfig = {};
   private selectableRange: [number, number] = [0, 0];
+  
+  // 回调函数 - 用于向父组件传递数据
+  onSelectedDatesChange?: (dates: number[]) => void;
   
   // List组件控制器
   private listScroller: ListScroller = new ListScroller();
@@ -272,6 +275,11 @@ export struct DatePickerComponent {
     
     // 更新对应的月份数据
     this.updateDaySelection(dayData.timestamp);
+    
+    // 通知父组件选中日期变化
+    if (this.onSelectedDatesChange) {
+      this.onSelectedDatesChange(this.getSelectedDates());
+    }
   }
   
   // 更新日期选中状态

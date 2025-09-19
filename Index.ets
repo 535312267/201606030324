@@ -4,11 +4,11 @@ import { DatePickerComponent, DatePickerConfig } from './DatePickerComponent';
 @Component
 struct Index {
   @State private selectedDates: number[] = [];
-  private datePickerRef: DatePickerComponent | null = null;
+  @State private datePickerConfig: DatePickerConfig = {};
   
   aboutToAppear() {
     // 配置日期选择器
-    const config: DatePickerConfig = {
+    this.datePickerConfig = {
       // 设置默认选中范围（示例：选中未来7天）
       defaultSelectedRange: [
         Date.now(),
@@ -19,8 +19,28 @@ struct Index {
       // 网络数据加载回调
       onDataLoad: (timestamps: number[]) => {
         console.log('Network data loaded:', timestamps);
+        // 可以在这里处理网络数据
       }
     };
+  }
+  
+  // 处理选中日期变化
+  private handleSelectedDatesChange = (dates: number[]) => {
+    this.selectedDates = dates;
+    console.log('Selected dates changed:', dates);
+  }
+  
+  // 清除选择
+  private clearSelection = () => {
+    // 通过更新配置来清除选择
+    const newConfig: DatePickerConfig = {
+      selectableDates: this.datePickerConfig.selectableDates,
+      futureSelectedState: this.datePickerConfig.futureSelectedState,
+      onDataLoad: this.datePickerConfig.onDataLoad,
+      defaultSelectedRange: undefined
+    };
+    this.datePickerConfig = newConfig;
+    this.selectedDates = [];
   }
   
   build() {
@@ -38,12 +58,7 @@ struct Index {
           .backgroundColor(Color.Transparent)
           .fontColor(Color.White)
           .border({ width: 1, color: Color.White, radius: 16 })
-          .onClick(() => {
-            if (this.datePickerRef) {
-              this.datePickerRef.clearSelection();
-              this.selectedDates = [];
-            }
-          })
+          .onClick(this.clearSelection)
       }
       .width('100%')
       .height(56)
@@ -52,13 +67,10 @@ struct Index {
       
       // 日期选择器组件
       DatePickerComponent({
-        // 传入配置
+        config: this.datePickerConfig,
+        onSelectedDatesChange: this.handleSelectedDatesChange
       })
         .layoutWeight(1)
-        .onAppear(() => {
-          // 获取组件引用以便调用公共方法
-          // this.datePickerRef = ???; // 注意：在实际使用中需要通过其他方式获取组件引用
-        })
       
       // 底部操作栏
       Row() {
