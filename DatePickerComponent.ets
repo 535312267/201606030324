@@ -210,18 +210,39 @@ export struct DatePickerComponent {
   
   // 使用网络数据更新月份
   private updateMonthsWithNetworkData() {
-    this.monthList = this.monthList.map(monthData => {
-      const updatedDays = monthData.days.map(dayData => ({
-        ...dayData,
-        hasNetworkData: this.networkDataTimestamps.has(dayData.timestamp),
-        isSelected: this.selectedDates.has(dayData.timestamp)
-      }));
+    const newMonthList: MonthData[] = [];
+    
+    for (let i = 0; i < this.monthList.length; i++) {
+      const monthData = this.monthList[i];
+      const updatedDays: DayData[] = [];
+      
+      for (let j = 0; j < monthData.days.length; j++) {
+        const dayData = monthData.days[j];
+        const updatedDayData: DayData = {
+          day: dayData.day,
+          timestamp: dayData.timestamp,
+          isSelected: this.selectedDates.has(dayData.timestamp),
+          isFuture: dayData.isFuture,
+          isInRange: dayData.isInRange,
+          hasNetworkData: this.networkDataTimestamps.has(dayData.timestamp)
+        };
+        updatedDays.push(updatedDayData);
+      }
       
       // 重新生成周数据
       const weeks = this.generateWeeksData(monthData.year, monthData.month, updatedDays);
       
-      return { ...monthData, days: updatedDays, weeks };
-    });
+      const updatedMonthData: MonthData = {
+        year: monthData.year,
+        month: monthData.month,
+        days: updatedDays,
+        weeks: weeks
+      };
+      
+      newMonthList.push(updatedMonthData);
+    }
+    
+    this.monthList = newMonthList;
   }
   
   // 处理日期点击
@@ -262,10 +283,29 @@ export struct DatePickerComponent {
         day.timestamp === timestamp
       );
       
-      if (dayIndex >= 0) {
-        this.monthList[monthIndex].days[dayIndex].isSelected = 
-          this.selectedDates.has(timestamp);
-      }
+        if (dayIndex >= 0) {
+          const dayData = this.monthList[monthIndex].days[dayIndex];
+          const updatedDayData: DayData = {
+            day: dayData.day,
+            timestamp: dayData.timestamp,
+            isSelected: this.selectedDates.has(timestamp),
+            isFuture: dayData.isFuture,
+            isInRange: dayData.isInRange,
+            hasNetworkData: dayData.hasNetworkData
+          };
+          this.monthList[monthIndex].days[dayIndex] = updatedDayData;
+          
+          // 重新生成周数据
+          const monthData = this.monthList[monthIndex];
+          const weeks = this.generateWeeksData(monthData.year, monthData.month, monthData.days);
+          const updatedMonthData: MonthData = {
+            year: monthData.year,
+            month: monthData.month,
+            days: monthData.days,
+            weeks: weeks
+          };
+          this.monthList[monthIndex] = updatedMonthData;
+        }
     }
   }
   
@@ -319,7 +359,16 @@ export struct DatePickerComponent {
         const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
         newMonths.unshift(monthData);
       }
-      this.monthList = [...newMonths, ...this.monthList];
+      
+      // 合并数组
+      const combinedList: MonthData[] = [];
+      for (let i = 0; i < newMonths.length; i++) {
+        combinedList.push(newMonths[i]);
+      }
+      for (let i = 0; i < this.monthList.length; i++) {
+        combinedList.push(this.monthList[i]);
+      }
+      this.monthList = combinedList;
     }
   }
   
@@ -546,16 +595,38 @@ export struct DatePickerComponent {
   
   // 更新所有月份的选中状态
   private updateAllMonthsSelection() {
-    this.monthList = this.monthList.map(monthData => {
-      const updatedDays = monthData.days.map(dayData => ({
-        ...dayData,
-        isSelected: this.selectedDates.has(dayData.timestamp)
-      }));
+    const newMonthList: MonthData[] = [];
+    
+    for (let i = 0; i < this.monthList.length; i++) {
+      const monthData = this.monthList[i];
+      const updatedDays: DayData[] = [];
+      
+      for (let j = 0; j < monthData.days.length; j++) {
+        const dayData = monthData.days[j];
+        const updatedDayData: DayData = {
+          day: dayData.day,
+          timestamp: dayData.timestamp,
+          isSelected: this.selectedDates.has(dayData.timestamp),
+          isFuture: dayData.isFuture,
+          isInRange: dayData.isInRange,
+          hasNetworkData: dayData.hasNetworkData
+        };
+        updatedDays.push(updatedDayData);
+      }
       
       // 重新生成周数据
       const weeks = this.generateWeeksData(monthData.year, monthData.month, updatedDays);
       
-      return { ...monthData, days: updatedDays, weeks };
-    });
+      const updatedMonthData: MonthData = {
+        year: monthData.year,
+        month: monthData.month,
+        days: updatedDays,
+        weeks: weeks
+      };
+      
+      newMonthList.push(updatedMonthData);
+    }
+    
+    this.monthList = newMonthList;
   }
 }
