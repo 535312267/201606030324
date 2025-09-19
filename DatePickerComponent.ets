@@ -95,20 +95,57 @@ export struct DatePickerComponent {
     const currentYear = now.getFullYear();
     const currentMonth = now.getMonth();
     
-    // 生成最近6个月的数据（包括当前月和下个月）
-    // 按时间倒序排列：最新的月份在最后
-    for (let i = 5; i >= 0; i--) {
-      const targetDate = new Date(currentYear, currentMonth + 1 - i, 1);
+    // 生成更多初始数据，包括历史月份，减少首次加载时的卡顿
+    // 生成过去12个月到下个月的数据
+    for (let i = 12; i >= -1; i--) {
+      const targetDate = new Date(currentYear, currentMonth - i, 1);
+      
+      // 确保不超过2010年1月
+      if (targetDate.getFullYear() < 2010 || 
+          (targetDate.getFullYear() === 2010 && targetDate.getMonth() < 0)) {
+        continue;
+      }
+      
+      // 确保不超过下个月
+      const nextMonth = new Date(currentYear, currentMonth + 2, 0);
+      if (targetDate.getTime() > nextMonth.getTime()) {
+        continue;
+      }
+      
       const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
       this.monthList.push(monthData);
     }
+    
+    console.log(`Generated ${this.monthList.length} initial months`);
   }
   
   // 生成单个月份的数据
   private generateMonthData(year: number, month: number): MonthData {
     const cacheKey = `${year}-${month}`;
+    
+    // 检查缓存，但需要更新选中状态和网络数据状态
     if (this.monthCache.has(cacheKey)) {
-      return this.monthCache.get(cacheKey)!;
+      const cachedData = this.monthCache.get(cacheKey)!;
+      
+      // 更新动态数据（选中状态和网络数据）
+      const updatedDays: DayData[] = [];
+      for (let i = 0; i < cachedData.days.length; i++) {
+        const dayData = cachedData.days[i];
+        const updatedDayData: DayData = {
+          day: dayData.day,
+          timestamp: dayData.timestamp,
+          isSelected: this.selectedDates.has(dayData.timestamp),
+          isFuture: dayData.isFuture,
+          isInRange: dayData.isInRange,
+          hasNetworkData: this.networkDataTimestamps.has(dayData.timestamp)
+        };
+        updatedDays.push(updatedDayData);
+      }
+      
+      // 重新生成周数据
+      const weeks = this.generateWeeksData(year, month, updatedDays);
+      
+      return { year, month, days: updatedDays, weeks };
     }
     
     const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -135,7 +172,29 @@ export struct DatePickerComponent {
     const weeks = this.generateWeeksData(year, month, days);
     
     const monthData: MonthData = { year, month, days, weeks };
-    this.monthCache.set(cacheKey, monthData);
+    
+    // 只缓存静态数据（不包括选中状态）
+    const staticDays: DayData[] = [];
+    for (let i = 0; i < days.length; i++) {
+      const d = days[i];
+      const staticDay: DayData = {
+        day: d.day,
+        timestamp: d.timestamp,
+        isSelected: false, // 不缓存选中状态
+        isFuture: d.isFuture,
+        isInRange: d.isInRange,
+        hasNetworkData: false // 不缓存网络数据状态
+      };
+      staticDays.push(staticDay);
+    }
+    
+    const staticMonthData: MonthData = {
+      year,
+      month,
+      days: staticDays,
+      weeks: [] // 周数据会重新生成
+    };
+    this.monthCache.set(cacheKey, staticMonthData);
     
     return monthData;
   }
@@ -358,8 +417,8 @@ export struct DatePickerComponent {
   
   // 滑动到指定索引时加载更多月份
   private onScrollIndex = (start: number, end: number) => {
-    // 当滑动到接近开头时，加载更多历史月份
-    if (start <= 1) {
+    // 当滑动到接近开头时，提前加载更多历史月份
+    if (start <= 2 && !this.isLoadingMore) {
       this.loadMoreHistoryMonths();
     }
     
@@ -367,35 +426,63 @@ export struct DatePickerComponent {
     this.currentDisplayMonth = Math.floor((start + end) / 2);
   }
   
+  // 防止重复加载的标志
+  private isLoadingMore: boolean = false;
+  
   // 加载更多历史月份
   private loadMoreHistoryMonths() {
+    // 防止重复加载
+    if (this.isLoadingMore) {
+      return;
+    }
+    
+    this.isLoadingMore = true;
+    console.log('Loading more history months...');
+    
     const firstMonth = this.monthList[0];
     const firstDate = new Date(firstMonth.year, firstMonth.month, 1);
     
-    // 添加6个更早的月份到开头
-    const newMonths: MonthData[] = [];
-    for (let i = 1; i <= 6; i++) {
-      const targetDate = new Date(firstDate.getFullYear(), firstDate.getMonth() - i, 1);
-      
-      // 检查是否已经到达2010年1月
-      if (targetDate.getFullYear() < 2010 || 
-          (targetDate.getFullYear() === 2010 && targetDate.getMonth() < 0)) {
-        break;
-      }
-      
-      const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
-      newMonths.unshift(monthData); // 添加到数组开头
+    // 检查是否已经到达2010年1月
+    if (firstDate.getFullYear() <= 2010 && firstDate.getMonth() <= 0) {
+      console.log('Already reached 2010-01, no more data to load');
+      this.isLoadingMore = false;
+      return;
     }
     
-    // 将新月份添加到列表开头
-    const combinedList: MonthData[] = [];
-    for (let i = 0; i < newMonths.length; i++) {
-      combinedList.push(newMonths[i]);
-    }
-    for (let i = 0; i < this.monthList.length; i++) {
-      combinedList.push(this.monthList[i]);
-    }
-    this.monthList = combinedList;
+    // 使用setTimeout来避免阻塞UI
+    setTimeout(() => {
+      const newMonths: MonthData[] = [];
+      
+      // 添加3个月而不是6个月，减少一次性加载的数据量
+      for (let i = 1; i <= 3; i++) {
+        const targetDate = new Date(firstDate.getFullYear(), firstDate.getMonth() - i, 1);
+        
+        // 检查是否已经到达2010年1月
+        if (targetDate.getFullYear() < 2010 || 
+            (targetDate.getFullYear() === 2010 && targetDate.getMonth() < 0)) {
+          break;
+        }
+        
+        const monthData = this.generateMonthData(targetDate.getFullYear(), targetDate.getMonth());
+        newMonths.unshift(monthData); // 添加到数组开头
+      }
+      
+      if (newMonths.length > 0) {
+        // 将新月份添加到列表开头
+        const combinedList: MonthData[] = [];
+        for (let i = 0; i < newMonths.length; i++) {
+          combinedList.push(newMonths[i]);
+        }
+        for (let i = 0; i < this.monthList.length; i++) {
+          combinedList.push(this.monthList[i]);
+        }
+        
+        this.monthList = combinedList;
+        console.log(`Loaded ${newMonths.length} more months, total: ${this.monthList.length}`);
+      }
+      
+      this.isLoadingMore = false;
+    }, 16); // 约一帧的时间，避免阻塞
   }
   
   
@@ -470,23 +557,29 @@ export struct DatePickerComponent {
           ListItem() {
             this.MonthView(monthData)
           }
+          .reuseId(`month-${monthData.year}-${monthData.month}`)
         }, (monthData: MonthData) => `${monthData.year}-${monthData.month}`)
       }
       .layoutWeight(1)
       .onScrollIndex(this.onScrollIndex)
+      .cachedCount(5) // 缓存5个月的数据
+      .listDirection(Axis.Vertical)
+      .scrollBar(BarState.Auto)
+      .edgeEffect(EdgeEffect.Spring) // 添加弹性边缘效果
       
       // 加载指示器
-      if (this.isLoading) {
+      if (this.isLoading || this.isLoadingMore) {
         Row() {
           LoadingProgress()
             .width(20)
             .height(20)
-          Text('加载中...')
+          Text(this.isLoadingMore ? '加载更多历史数据...' : '加载中...')
             .fontSize(12)
             .fontColor('#999')
             .margin({ left: 8 })
         }
         .padding(16)
+        .justifyContent(FlexAlign.Center)
       }
     }
     .width('100%')
