@@ -1,0 +1,36 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "鸿蒙绘图上传应用"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "鸿蒙绘图上传应用主入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "绘图上传"
+    },
+    {
+      "name": "permission_internet_reason",
+      "value": "需要网络权限用于上传图片到服务器"
+    },
+    {
+      "name": "permission_read_media_reason",
+      "value": "需要读取媒体权限用于选择和显示图片"
+    },
+    {
+      "name": "permission_write_media_reason",
+      "value": "需要写入媒体权限用于保存绘制的图片"
+    },
+    {
+      "name": "permission_media_location_reason",
+      "value": "需要媒体位置权限用于获取图片位置信息"
+    },
+    {
+      "name": "permission_camera_reason",
+      "value": "需要相机权限用于拍照上传功能"
+    }
+  ]
+}
