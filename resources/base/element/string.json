@@ -1,0 +1,24 @@
+{
+  "string": [
+    {
+      "name": "module_desc",
+      "value": "卫生巾使用时间监控应用模块"
+    },
+    {
+      "name": "EntryAbility_desc",
+      "value": "卫生巾使用时间监控应用入口"
+    },
+    {
+      "name": "EntryAbility_label",
+      "value": "卫生巾监控"
+    },
+    {
+      "name": "app_name",
+      "value": "卫生巾使用监控"
+    },
+    {
+      "name": "app_description",
+      "value": "智能卫生巾使用时间监控应用，帮助女性更好地管理个人卫生"
+    }
+  ]
+}
